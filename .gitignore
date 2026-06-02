@@ -1,0 +1,149 @@
+# ==========================================
+# 1. Python Core & Virtual Environments
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+ENV/
+
+# ==========================================
+# 2. Environment Variables & Secrets (CRITICAL)
+# ==========================================
+# Explicitly blocking actual secrets while allowing the templates
+.env
+.env.[a-zA-Z0-9]*
+!.env.example
+!.env.test
+!.env.override.yml.example
+
+# HashiCorp Vault tokens/local storage if auto-generated
+.vault-token
+infra/vault/data/
+
+# ==========================================
+# 3. Databases, FAISS Indices, & Large Storage
+# ==========================================
+# Local SQLite or Docker volume dumps
+*.db
+*.sqlite3
+*.dump
+*.sql
+
+# Vector Index data (Crucial: metadata and FAISS indices are generated locally/via MinIO)
+retrieval/index_data/index_active/*
+retrieval/index_data/index_staging/*
+retrieval/index_data/index_backup/*
+# Preserve the tracking file structure
+!retrieval/index_data/.gitkeep
+
+# MinIO Local Storage blocks (if mapped to host)
+infra/minio/data/
+
+# ==========================================
+# 4. Next.js Frontend Development & Build
+# ==========================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Next.js debug/log files
+frontend/.pnp
+frontend/*.pnp.js
+frontend/coverage/
+frontend/.yarn/
+
+# TypeScript / ESLint cache
+frontend/.eslintcache
+frontend/tsbuildinfo
+
+# ==========================================
+# 5. Scrapy & Web Scraper Data
+# ==========================================
+# Prevent committing downloaded PDFs, raw HTML, and scraped operational assets
+scraper/scrapy_project/.scrapy/
+*.html
+*.pdf
+*.json
+# Exceptions: Keep your test fixtures and demo seed profiles!
+!scraper/tests/fixtures/*.html
+!db/seeds/*.json
+!pipeline/tests/fixtures/*.json
+!retrieval/golden_test_set.json
+
+# ==========================================
+# 6. Testing, Coverage, & Code Quality
+# ==========================================
+.htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ==========================================
+# 7. Infrastructure, CI/CD, & DevOps
+# ==========================================
+# Docker overrides intended strictly for individual developer setups
+docker-compose.override.yml
+
+# TLS Certificates for NGINX edge routing
+infra/nginx/ssl/*
+!infra/nginx/ssl/.gitkeep
+
+# Prometheus / Grafana local runtime data
+infra/prometheus/data/
+infra/grafana/data/
+
+# ==========================================
+# 8. OS & IDE Specific files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# JetBrains (PyCharm) and VS Code configs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
