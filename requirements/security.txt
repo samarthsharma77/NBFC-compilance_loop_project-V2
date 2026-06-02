@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — Security requirements
+# Used by: api, worker, audit, dpdp modules
+# Install: pip install -r requirements/base.txt -r requirements/security.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+-r base.txt
+
+# Cryptographic primitives (AES-256-GCM, HMAC-SHA256, key derivation)
+cryptography==43.0.0             # PyCA cryptography — AES-GCM, HMAC, PBKDF2
+pyOpenSSL==24.2.1                # TLS certificate handling
+
+# JWT token handling (API authentication)
+python-jose[cryptography]==3.3.0
+
+# Password / API key hashing
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.0
+
+# HashiCorp Vault client (secrets management)
+hvac==2.3.0                      # Vault Python client
+
+# Secrets scanning (used in CI, not runtime)
+detect-secrets==1.5.0
+
+# Secure random number generation
+# secrets is stdlib in Python 3.6+ — no extra package needed
+
+# HMAC constant-time comparison
+# hmac is stdlib — no extra package needed

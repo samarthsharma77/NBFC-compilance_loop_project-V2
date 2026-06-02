@@ -1,0 +1,216 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "complianceloop"
+version = "1.0.0"
+description = "AI-Native NBFC Compliance Operating System"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "ComplianceLoop Engineering" }
+]
+keywords = ["nbfc", "compliance", "rbi", "dpdp", "fintech", "langgraph"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+api = ["fastapi", "uvicorn"]
+pipeline = ["langgraph", "langchain", "faiss-cpu", "sentence-transformers"]
+scraper = ["scrapy", "playwright"]
+worker = ["celery", "redis"]
+security = ["cryptography", "python-jose"]
+dev = ["pytest", "black", "ruff", "mypy"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "api*", "pipeline*", "audit*", "retrieval*", "scraper*",
+    "retro_eval*", "calibration*", "models*", "db*", "workers*",
+    "notifications*", "dpdp*", "observability*", "security*", "demo*"
+]
+
+# ── pytest ──────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "api/tests",
+    "pipeline/tests",
+    "audit/tests",
+    "retrieval/tests",
+    "scraper/tests",
+    "retro_eval/tests",
+    "calibration/tests",
+    "dpdp/tests",
+    "observability/tests",
+    "security/tests",
+    "notifications/tests",
+    "demo/tests",
+    "tests",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "-ra",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=80",
+]
+markers = [
+    "unit: fast unit tests with no external dependencies",
+    "integration: tests requiring Docker (Postgres, Redis, MinIO)",
+    "e2e: end-to-end tests against full running stack",
+    "slow: tests that take more than 5 seconds",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pkg_resources",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning:torch",
+]
+
+# ── coverage ─────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+branch = true
+source = [
+    "api", "pipeline", "audit", "retrieval", "scraper",
+    "retro_eval", "calibration", "models", "db", "workers",
+    "notifications", "dpdp", "observability", "security", "demo"
+]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/__init__.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@(abc\\.)?abstractmethod",
+]
+
+# ── black ────────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | db/migrations/versions
+)/
+'''
+
+# ── ruff ─────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+    "api", "pipeline", "audit", "retrieval", "scraper",
+    "retro_eval", "calibration", "models", "db", "workers",
+    "notifications", "dpdp", "observability", "security", "demo"
+]
+exclude = [
+    ".git", ".venv", "__pycache__", "build", "dist",
+    "db/migrations/versions", "frontend", "infra"
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security)
+    "T20",  # flake8-print (no print statements in prod code)
+    "RUF",  # ruff-specific rules
+    "ANN",  # flake8-annotations (type hints)
+    "PTH",  # flake8-use-pathlib
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "ANN101",  # Missing type annotation for `self`
+    "ANN102",  # Missing type annotation for `cls`
+    "ANN401",  # Dynamically typed expressions (Any) are disallowed
+    "S101",    # Use of assert (needed in tests)
+    "S104",    # Possible binding to all interfaces (needed for Docker)
+    "B008",    # Do not perform function calls in default arguments (FastAPI Depends)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["S", "ANN", "T20"]
+"db/migrations/*" = ["ANN", "E501"]
+"db/seeds/*" = ["S", "T20"]
+"scripts/*" = ["T20", "S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "api", "pipeline", "audit", "retrieval", "scraper",
+    "retro_eval", "calibration", "models", "db", "workers",
+    "notifications", "dpdp", "observability", "security", "demo"
+]
+force-sort-within-sections = true
+
+# ── mypy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+exclude = [
+    "db/migrations/",
+    "frontend/",
+    "infra/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "faiss.*",
+    "sentence_transformers.*",
+    "scrapy.*",
+    "playwright.*",
+    "celery.*",
+    "redis.*",
+    "minio.*",
+    "structlog.*",
+    "prometheus_client.*",
+    "langchain.*",
+    "langgraph.*",
+    "pdfminer.*",
+    "bs4.*",
+    "Levenshtein.*",
+    "jinja2.*",
+]
+ignore_missing_imports = true

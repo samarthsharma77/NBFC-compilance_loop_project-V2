@@ -1,0 +1,579 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ComplianceLoop — Production Docker Compose Stack
+#
+# Services:
+#   nginx         → Reverse proxy + TLS termination (port 80/443)
+#   api           → FastAPI application (4 Uvicorn workers)
+#   worker        → Celery worker (pipeline + retro_eval + notifications)
+#   beat          → Celery Beat scheduler (scraper + calibration schedules)
+#   scraper       → Celery worker dedicated to scraper queue
+#   postgres      → PostgreSQL 16 (primary database)
+#   redis         → Redis 7 (broker + cache)
+#   minio         → MinIO (audit payloads + FAISS snapshots)
+#   prometheus    → Metrics collection
+#   grafana       → Dashboards
+#   alertmanager  → Alert routing
+#   vault         → Secrets management
+#
+# Usage:
+#   docker compose up -d
+#   docker compose up -d --scale worker=2   (scale workers)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  vault_data:
+    driver: local
+  faiss_index_data:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  # Internal network — no external access
+  internal:
+    driver: bridge
+    internal: true
+  # Public network — only Nginx is attached
+  public:
+    driver: bridge
+
+# ── Common anchors ────────────────────────────────────────────────────────────
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  networks:
+    - internal
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "5"
+      labels: "service"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+# ── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── Nginx ──────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: complianceloop_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/sites:/etc/nginx/conf.d:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - public
+      - internal
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      <<: *healthcheck-defaults
+
+  # ── API ────────────────────────────────────────────────────────────────────
+  api:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    container_name: complianceloop_api
+    image: complianceloop/api:latest
+    labels:
+      - "service=api"
+    environment:
+      - APP_ENV=production
+      - API_WORKERS=4
+      - API_RELOAD=false
+    volumes:
+      # Mount FAISS index directory (shared with worker via named volume)
+      - faiss_index_data:/app/retrieval/index_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *healthcheck-defaults
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+
+  # ── Celery Worker (pipeline + retro_eval + notifications) ─────────────────
+  worker:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: complianceloop_worker
+    image: complianceloop/worker:latest
+    labels:
+      - "service=worker"
+    command: >
+      celery -A workers.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=pipeline,retro_eval,notifications
+      --hostname=worker@%h
+      --without-gossip
+      --without-mingle
+    volumes:
+      - faiss_index_data:/app/retrieval/index_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: >
+        celery -A workers.celery_app inspect ping
+        --destination worker@$$HOSTNAME --timeout=10
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 8G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+
+  # ── Celery Beat Scheduler ─────────────────────────────────────────────────
+  beat:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: complianceloop_beat
+    image: complianceloop/worker:latest
+    labels:
+      - "service=beat"
+    command: >
+      celery -A workers.celery_app beat
+      --loglevel=info
+      --scheduler=celery.beat:PersistentScheduler
+      --schedule=/tmp/celerybeat-schedule
+    # Beat MUST be a single instance — never scale this service
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 1          # CRITICAL: never scale beat scheduler
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  # ── Celery Worker — Scraper queue only ────────────────────────────────────
+  scraper-worker:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: complianceloop_scraper_worker
+    image: complianceloop/worker:latest
+    labels:
+      - "service=scraper-worker"
+    command: >
+      celery -A workers.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      --queues=scraper
+      --hostname=scraper@%h
+    volumes:
+      - faiss_index_data:/app/retrieval/index_data
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: complianceloop_postgres
+    labels:
+      - "service=postgres"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-complianceloop}
+      POSTGRES_USER: ${POSTGRES_USER:-complianceloop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      # Performance tuning for NBFC workload
+      POSTGRES_EXTRA_OPTS: >
+        -c shared_buffers=512MB
+        -c work_mem=16MB
+        -c maintenance_work_mem=128MB
+        -c effective_cache_size=2GB
+        -c wal_level=replica
+        -c max_wal_size=2GB
+        -c checkpoint_completion_target=0.9
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+        -c max_connections=100
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts run once on first start
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"     # Bind to localhost only — not public
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-complianceloop} -d ${POSTGRES_DB:-complianceloop}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 8G
+        reservations:
+          memory: 2G
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: complianceloop_redis
+    labels:
+      - "service=redis"
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"     # Bind to localhost only
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 2G
+
+  # ── MinIO ─────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-08-03T04-33-23Z
+    container_name: complianceloop_minio
+    labels:
+      - "service=minio"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"     # S3 API — localhost only
+      - "127.0.0.1:9001:9001"     # Console — localhost only
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 2G
+
+  # MinIO bucket initialisation (runs once, then exits)
+  minio-init:
+    image: minio/mc:RELEASE.2024-08-01T03-43-14Z
+    container_name: complianceloop_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - internal
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      mc mb --ignore-existing local/complianceloop-audit;
+      mc mb --ignore-existing local/complianceloop-faiss-snapshots;
+      mc mb --ignore-existing local/complianceloop-raw-circulars;
+      mc anonymous set-json /dev/stdin local/complianceloop-audit <<'EOF'
+      {\"Version\":\"2012-10-17\",\"Statement\":[]}
+      EOF
+      echo 'MinIO buckets initialised.';
+      exit 0;
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    restart: "no"
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: complianceloop_prometheus
+    labels:
+      - "service=prometheus"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=10GB"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"      # Allow config reload via HTTP POST
+      - "--web.enable-admin-api"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alert_rules:/etc/prometheus/alert_rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 2G
+
+  # ── Alertmanager ─────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: complianceloop_alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - internal
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: complianceloop_grafana
+    labels:
+      - "service=grafana"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - internal
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 -O /dev/null http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+
+  # ── HashiCorp Vault ───────────────────────────────────────────────────────
+  vault:
+    image: hashicorp/vault:1.17.3
+    container_name: complianceloop_vault
+    labels:
+      - "service=vault"
+    command: vault server -config=/vault/config/vault.hcl
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-root}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_ADDR: "http://0.0.0.0:8200"
+    volumes:
+      - vault_data:/vault/data
+      - ./infra/vault/vault.hcl:/vault/config/vault.hcl:ro
+    ports:
+      - "127.0.0.1:8200:8200"
+    cap_add:
+      - IPC_LOCK              # Vault requires this to prevent memory from being swapped
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ── Flower (Celery monitoring) ────────────────────────────────────────────
+  flower:
+    <<: *app-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    container_name: complianceloop_flower
+    labels:
+      - "service=flower"
+    command: >
+      celery -A workers.celery_app flower
+      --port=5555
+      --basic-auth=${FLOWER_BASIC_AUTH:-admin:changeme}
+    ports:
+      - "127.0.0.1:5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 512M
+
+  # ── Postgres Exporter (Prometheus metrics for Postgres) ───────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: complianceloop_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M
+
+  # ── Redis Exporter (Prometheus metrics for Redis) ─────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: complianceloop_redis_exporter
+    environment:
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - internal
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128M

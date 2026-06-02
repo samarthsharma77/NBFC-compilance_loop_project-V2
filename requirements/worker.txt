@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — Worker service requirements
+# The Celery worker runs pipeline tasks, retro-eval, calibration, and notifications
+# Install: pip install -r requirements/base.txt -r requirements/pipeline.txt
+#                      -r requirements/scraper.txt -r requirements/worker.txt
+# NOTE: worker needs pipeline + scraper deps because it executes both
+# ─────────────────────────────────────────────────────────────────────────────
+
+-r base.txt
+
+# Task queue
+celery[redis]==5.4.0             # Redis as both broker and result backend
+celery[auth]==5.4.0              # Message signing
+billiard==4.2.0                  # Celery's multiprocessing fork
+kombu==5.3.4                     # Celery's messaging library
+vine==5.1.0                      # Celery async primitives
+
+# Celery monitoring (optional but recommended)
+flower==2.0.1                    # Web UI for Celery task monitoring at :5555
+
+# Email delivery (notification worker)
+sendgrid==6.11.0                 # SendGrid free tier SMTP
+
+# MinIO client (audit payload upload, index snapshot storage)
+minio==7.2.8
+
+# Prometheus metrics for worker
+prometheus-client==0.20.0
+
+# APScheduler not needed — using Celery Beat for scheduling

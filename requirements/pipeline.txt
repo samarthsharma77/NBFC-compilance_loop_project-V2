@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — Pipeline service requirements
+# Install: pip install -r requirements/base.txt -r requirements/pipeline.txt
+# NOTE: sentence-transformers will pull torch (CPU only) — ~500MB first install
+# ─────────────────────────────────────────────────────────────────────────────
+
+-r base.txt
+
+# LangGraph + LangChain (pipeline orchestration)
+langgraph==0.2.16
+langchain==0.2.14
+langchain-core==0.2.33
+langchain-community==0.2.12
+langchain-openai==0.1.22         # OpenAI-compatible interface (used for Ollama + Groq)
+langgraph-checkpoint-postgres==2.0.2  # PostgreSQL checkpointer for LangGraph
+
+# LLM inference (Ollama-compatible)
+openai==1.40.0                   # OpenAI SDK — used for Ollama + Groq (both are OAI-compatible)
+
+# Embeddings (sentence-transformers runs on CPU)
+sentence-transformers==3.1.0
+torch==2.4.0+cpu                 # CPU-only build — significantly smaller
+torchvision==0.19.0+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Vector store
+faiss-cpu==1.8.0                 # CPU build — no GPU dependency
+
+# Text processing
+tiktoken==0.7.0                  # Token counting for chunking
+nltk==3.9.1                      # Tokenisation utilities
+python-Levenshtein==0.25.1       # Fuzzy name matching in document agent
+jellyfish==1.1.0                 # Jaro-Winkler for sanctions agent
+rapidfuzz==3.9.7                 # Fast fuzzy matching (token_sort_ratio)
+
+# PDF text extraction (for regulatory corpus)
+pdfminer.six==20231228
+
+# HTML parsing (for regulatory corpus + scraper)
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# Numpy (pulled by torch/faiss but pinned explicitly)
+numpy==1.26.4

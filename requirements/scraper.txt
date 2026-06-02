@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — Scraper service requirements
+# Install: pip install -r requirements/base.txt -r requirements/scraper.txt
+# NOTE: playwright requires a separate browser install step:
+#   playwright install chromium
+# ─────────────────────────────────────────────────────────────────────────────
+
+-r base.txt
+
+# Web scraping framework
+Scrapy==2.11.2
+scrapy-playwright==0.0.40        # Playwright middleware for JS-rendered pages
+playwright==1.46.0               # Headless Chromium for RBI JS-rendered portal pages
+
+# HTTP utilities
+w3lib==2.2.1                     # URL normalisation (used by Scrapy internally)
+parsel==1.9.1                    # XPath/CSS selectors (used by Scrapy internally)
+
+# HTML/PDF parsing (shared with pipeline but explicit here)
+beautifulsoup4==4.12.3
+lxml==5.3.0
+pdfminer.six==20231228
+
+# Text diffing (delta detector)
+# difflib is stdlib — no extra package needed
+
+# Hashing utilities
+# hashlib is stdlib — no extra package needed
+
+# MinIO client (scraper uploads raw circulars to object storage)
+minio==7.2.8
+
+# Date parsing (effective date extraction from circulars)
+python-dateutil==2.9.0
+
+# Regex utilities (circular reference extraction)
+regex==2024.7.24                 # More feature-rich than stdlib re

@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — API service requirements
+# Install: pip install -r requirements/base.txt -r requirements/api.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+-r base.txt
+
+# ASGI framework + server
+fastapi==0.112.0
+uvicorn[standard]==0.30.5        # standard includes websockets, httptools, uvloop
+starlette==0.38.2
+
+# Request validation + serialisation
+python-multipart==0.0.9          # Form data / file uploads
+email-validator==2.2.0           # Email field validation in Pydantic
+
+# Authentication
+python-jose[cryptography]==3.3.0 # JWT token handling
+passlib[bcrypt]==1.7.4           # API key hashing (bcrypt)
+
+# Rate limiting
+slowapi==0.1.9                   # Redis-backed rate limiting for FastAPI
+
+# CORS (needed for demo frontend)
+# Built into Starlette/FastAPI — no extra package needed
+
+# SSE (Server-Sent Events for demo dashboard)
+sse-starlette==2.1.3
+
+# Prometheus metrics exposition
+prometheus-fastapi-instrumentator==7.0.0
+prometheus-client==0.20.0
+
+# OpenAPI extras
+# Built into FastAPI — no extra package needed
+
+# Async context vars (correlation ID middleware)
+contextvars==2.4                 # Backport, stdlib in 3.7+ but explicit pin for clarity

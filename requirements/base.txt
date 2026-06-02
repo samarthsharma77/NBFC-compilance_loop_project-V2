@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ComplianceLoop — Base requirements
+# Shared across ALL services (api, worker, pipeline, scraper)
+# Pin to exact versions for reproducible production builds
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Async support
+anyio==4.4.0
+asyncio-compat==0.1.2
+
+# Database (SQLAlchemy async + PostgreSQL driver)
+SQLAlchemy==2.0.31
+asyncpg==0.29.0
+alembic==1.13.2
+greenlet==3.0.3                  # Required by SQLAlchemy async
+
+# Redis client (async)
+redis==5.0.8
+
+# Pydantic v2 (used everywhere for data validation)
+pydantic==2.8.2
+pydantic-settings==2.4.0
+pydantic-extra-types==2.9.0
+
+# Environment / config
+python-dotenv==1.0.1
+
+# Structured logging
+structlog==24.4.0
+python-json-logger==2.0.7
+
+# HTTP client (for outbound webhooks, LLM calls)
+httpx==0.27.0
+tenacity==9.0.0                  # Retry logic for external calls
+
+# UUID and datetime utilities
+python-ulid==2.7.0
+
+# Jinja2 templating (prompts + notification templates)
+Jinja2==3.1.4
+MarkupSafe==2.1.5
+
+# Timezone handling
+pytz==2024.1
+
+# JSON canonicalisation (for audit hashing)
+canonicaljson==2.0.0
