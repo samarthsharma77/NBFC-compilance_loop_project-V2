@@ -19,6 +19,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from models.base import Base, UUIDPrimaryKeyMixin
 
@@ -39,9 +40,7 @@ class RetentionEvent(UUIDPrimaryKeyMixin, Base):
     )
 
     application_id: Mapped[uuid.UUID] = mapped_column(
-        UUID_column := __import__(
-            "sqlalchemy.dialects.postgresql", fromlist=["UUID"]
-        ).UUID(as_uuid=True),
+        PG_UUID(as_uuid=True),
         ForeignKey("applications.id", ondelete="RESTRICT"),
         nullable=False,
         comment="Application whose PII was wiped",
