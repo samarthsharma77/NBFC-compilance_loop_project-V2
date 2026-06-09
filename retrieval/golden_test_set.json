@@ -1,0 +1,102 @@
+[
+    {
+      "query": "FOIR fixed obligation to income ratio limit unsecured personal loan NBFC",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Core FOIR rule from NBFC Master Directions"
+    },
+    {
+      "query": "KYC update interval medium risk customer periodic re-KYC",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "Periodic KYC update requirement"
+    },
+    {
+      "query": "Officially Valid Document OVD identity proof Aadhaar Passport Voter ID",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "OVD definition and list"
+    },
+    {
+      "query": "Video based Customer Identification Process V-CIP remote onboarding NBFC",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "V-CIP remote onboarding rules"
+    },
+    {
+      "query": "digital lending guidelines regulated entity accountability vendor",
+      "expected_source_document_id": "RBI_DIGITAL_LENDING_GUIDELINES_2022",
+      "description": "Digital lending accountability"
+    },
+    {
+      "query": "loan disbursement borrower bank account direct disbursement prohibited",
+      "expected_source_document_id": "RBI_DIGITAL_LENDING_GUIDELINES_2022",
+      "description": "DL Guidelines direct disbursement rule"
+    },
+    {
+      "query": "scale based regulation NBFC upper layer middle base layer classification",
+      "expected_source_document_id": "RBI_SBR_FRAMEWORK_2021",
+      "description": "SBR framework tier classification"
+    },
+    {
+      "query": "net owned fund minimum capital requirement NBFC registration",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Minimum NOF requirement"
+    },
+    {
+      "query": "loan to value ratio residential property housing loan secured",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "LTV ratio for housing loans"
+    },
+    {
+      "query": "PMLA Prevention Money Laundering suspicious transaction reporting",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "AML/PMLA suspicious transaction requirements"
+    },
+    {
+      "query": "credit bureau report CIBIL score minimum requirement personal loan",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Credit bureau check requirements"
+    },
+    {
+      "query": "personal data consent notice data principal purpose collection DPDP",
+      "expected_source_document_id": "DPDP_ACT_2023",
+      "description": "DPDP consent and notice requirements"
+    },
+    {
+      "query": "data retention storage limitation personal data deletion after purpose",
+      "expected_source_document_id": "DPDP_ACT_2023",
+      "description": "DPDP storage limitation obligation"
+    },
+    {
+      "query": "data breach notification Data Protection Board 72 hours",
+      "expected_source_document_id": "DPDP_ACT_2023",
+      "description": "DPDP breach notification timeline"
+    },
+    {
+      "query": "microfinance loan household income limit repayment capacity assessment",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Microfinance income and repayment rules"
+    },
+    {
+      "query": "wilful defaulter list RBI CRILC reporting non-performing asset",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Defaulter reporting obligations"
+    },
+    {
+      "query": "PAN verification income tax department Form 60 loan below threshold",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "PAN requirement for loans"
+    },
+    {
+      "query": "grievance redressal mechanism borrower complaint regulated entity digital lending",
+      "expected_source_document_id": "RBI_DIGITAL_LENDING_GUIDELINES_2022",
+      "description": "DL Guidelines grievance redressal"
+    },
+    {
+      "query": "politically exposed person PEP enhanced due diligence KYC high risk",
+      "expected_source_document_id": "RBI_KYC_MASTER_DIRECTION_2016",
+      "description": "PEP enhanced due diligence requirements"
+    },
+    {
+      "query": "fair practices code interest rate transparency loan agreement NBFC borrower",
+      "expected_source_document_id": "RBI_NBFC_DIRECTIONS_2016",
+      "description": "Fair practices code transparency requirement"
+    }
+  ]
